@@ -16,7 +16,7 @@ body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);font-family
 main{width:100%;max-width:880px;padding:20px 12px 72px;display:flex;flex-direction:column;gap:16px}
 .top{display:flex;justify-content:space-between;align-items:center;font-weight:700}
 .pill{background:var(--card);border:1px solid var(--line);border-radius:99px;padding:6px 14px;font-size:14px}
-.dots{display:flex;gap:6px}.dots i{width:22px;height:6px;border-radius:4px;background:var(--line)}.dots i.on{background:var(--ink)}.dots i.done{background:var(--ok)}
+.dots{display:flex;gap:6px}.dots i{width:22px;height:6px;border-radius:4px;background:var(--line)}.dots i.on{background:var(--ink)}.dots i.done{background:var(--ok)}.dots i.fail{background:var(--bad)}
 .bar{height:10px;background:var(--line);border-radius:9px;overflow:hidden}
 .bar b{display:block;height:100%;width:100%;background:var(--ink);transform-origin:left;transition:background .3s}
 .bar.low b{background:var(--bad)}
@@ -107,12 +107,13 @@ function home(){
 function next(){
  S.turn++;
  if(S.turn>5){return levelDone()}
+ if(S.turn===1)S.hist=[];
  S.qs=[mathQ(S.level),colorQ(S.level)];S.res=[null,null];
  S.limit=timeFor(S.level);S.start=performance.now();S.locked=false;
- const dots=[1,2,3,4,5].map(i=>`<i class="${i<S.turn?'done':i===S.turn?'on':''}"></i>`).join('');
+ const dots=[1,2,3,4,5].map(i=>`<i class="${i<S.turn?(S.hist[i-1]?'done':'fail'):i===S.turn?'on':''}"></i>`).join('');
  const panel=(q,p)=>`<div class="panel ${q.kind}" id="p${p}"><section class="stage" id="st${p}"><span class="tag ${q.kind}">${q.kind==='m'?'Logic':'Color'}</span>${q.html}<div class="hint">${q.hint}</div></section>
  <div class="grid" id="g${p}">${q.opts.map((o,i)=>`<button class="opt" data-p="${p}" data-i="${i}" aria-label="${o.label}">${o.sw?`<span class="sw" style="background:${o.sw}"></span><small>${o.label}</small>`:o.label}</button>`).join('')}</div></div>`;
- app.innerHTML=`<div class="top"><span class="pill">Level ${S.level}</span><div class="dots" aria-label="Turn ${S.turn} of 5">${dots}</div><span class="pill">${'♥'.repeat(S.lives)||'–'}</span></div>
+ app.innerHTML=`<div class="top"><span class="pill">Level ${S.level}</span><div class="dots" id="dots" aria-label="Turn ${S.turn} of 5">${dots}</div><span class="pill" style="color:var(--bad)">${'♥'.repeat(S.lives)||'–'}</span></div>
  <div class="bar" id="bar"><b id="fill"></b></div>
  <div class="panels">${panel(S.qs[0],0)}${panel(S.qs[1],1)}</div>
  <div class="top"><span class="pill">Score ${S.score}</span><span class="pill">Streak ${S.streak}</span></div><div class="tip">Answer both before time runs out.</div>`;
@@ -143,6 +144,7 @@ function finish(){
   if(r&&r.ok){S.score+=50*S.level+Math.round(r.left*5);S.correct++}
   else{allOk=false;if(r)g.children[r.i].classList.add('bad')}
  });
+ S.hist[S.turn-1]=allOk;$('#dots').children[S.turn-1].className=allOk?'done':'fail';
  if(allOk){S.streak++;S.score+=Math.min(S.streak,5)*20}
  else{S.streak=0;S.lives--;document.querySelector('.panels').classList.add('shake')}
  setTimeout(()=>S.lives<=0?over():next(),allOk?700:1400);
