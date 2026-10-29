@@ -62,17 +62,34 @@ p{margin:0;color:var(--mute);max-width:36ch;line-height:1.45}
 <button class="pill themebtn" id="theme" type="button"></button>
 <canvas id="cf" aria-hidden="true"></canvas>
 <main id="app"></main>
-<div class="ver">v1.0</div>
+<div class="ver">v3.0</div>
 <script>
 const $=s=>document.querySelector(s),app=$('#app');
-const MIX={ // paint-style mixing
- 'Red+Yellow':['Orange','#ff8a1f'],'Blue+Yellow':['Green','#2fb344'],'Red+Blue':['Purple','#8a3ffc'],
- 'Red+White':['Pink','#ff9ec4'],'Blue+White':['Light blue','#8fc8ff'],'Black+White':['Gray','#8a8a96'],
- 'Green+Red':['Brown','#8a5130'],'Yellow+White':['Cream','#fff1a8'],'Blue+Black':['Navy','#1c2a5e'],
- 'Red+Black':['Maroon','#7a1425'],'Green+White':['Mint','#a6f0c6'],'Purple+White':['Lavender','#cdb4ff'],
- 'Orange+White':['Peach','#ffd0a6'],'Green+Black':['Forest','#1f5a34'],'Red+Orange':['Red-orange','#ff5a1f'],'Yellow+Green':['Lime','#b6e32f'],'Blue+Green':['Teal','#12a6a6'],'Red+Purple':['Magenta','#d0188f'],'Yellow+Orange':['Amber','#ffb21f'],'Blue+Purple':['Indigo','#4b3fd6']};
-const BASE={Red:'#e5384f',Yellow:'#ffd23f',Blue:'#2f6bff',White:'#ffffff',Black:'#15141f',Green:'#2fb344',Purple:'#8a3ffc',Orange:'#ff8a1f'};
-const LV_POOL=[['Red+Yellow','Blue+Yellow','Red+Blue','Red+White','Blue+White','Black+White'],Object.keys(MIX).slice(0,12),Object.keys(MIX),Object.keys(MIX)];
+const NAMED={Orange:'#ff8a1f',Green:'#2fb344',Purple:'#8a3ffc',Pink:'#ff9ec4','Light blue':'#8fc8ff',Gray:'#8a8a96',Brown:'#8a5130',Cream:'#fff1a8',Navy:'#0a2a9a',Maroon:'#7a1425',Mint:'#a6f0c6',Lavender:'#cdb4ff',Peach:'#ffd0a6',Forest:'#1f5a34','Red-orange':'#ff4a1c',Lime:'#b6e32f',Teal:'#12a6a6',Magenta:'#d0188f',Amber:'#ffb21f',Indigo:'#4b3fd6',Fuchsia:'#f13bef','Royal blue':'#2a63e4',Olive:'#8a7a00'};
+const BASE={Red:'#e5384f',Yellow:'#ffd200',Blue:'#2f5bff',White:'#ffffff',Black:'#15141f',Green:'#2fb344',Purple:'#8a3ffc',Orange:'#ff8a1f'};
+// real color math: convert to HSL, blend hues on a red-yellow-blue (paint) wheel, average the rest
+const toHsl=hex=>{const n=parseInt(hex.slice(1),16),r=(n>>16)/255,g=(n>>8&255)/255,b=(n&255)/255,mx=Math.max(r,g,b),mn=Math.min(r,g,b),d=mx-mn,l=(mx+mn)/2;let h=0;if(d){h=mx===r?((g-b)/d)%6:mx===g?(b-r)/d+2:(r-g)/d+4;h=(h*60+360)%360}return[h,d?d/(1-Math.abs(2*l-1)):0,l]};
+const fromHsl=(h,s,l)=>{h=((h%360)+360)%360;const c=(1-Math.abs(2*l-1))*s,x=c*(1-Math.abs((h/60)%2-1)),m=l-c/2,v=h<60?[c,x,0]:h<120?[x,c,0]:h<180?[0,c,x]:h<240?[0,x,c]:h<300?[x,0,c]:[c,0,x];return'#'+v.map(t=>Math.max(0,Math.min(255,Math.round((t+m)*255))).toString(16).padStart(2,'0')).join('')};
+const RGBH=[0,30,60,120,240,285,360],RYBH=[0,60,120,180,240,300,360];
+const mapH=(h,f,t)=>{for(let i=0;i<f.length-1;i++)if(h<=f[i+1])return t[i]+(h-f[i])/(f[i+1]-f[i])*(t[i+1]-t[i]);return h};
+const chrom=(s,l)=>s>.2&&l>.12&&l<.9;
+function mix(a,b){
+ const[h1,s1,l1]=toHsl(a),[h2,s2,l2]=toHsl(b),l=(l1+l2)/2,c1=chrom(s1,l1),c2=chrom(s2,l2);
+ if(c1&&c2){
+  const r1=mapH(h1,RGBH,RYBH),r2=mapH(h2,RGBH,RYBH),d=((r2-r1+540)%360)-180;
+  if(Math.abs(d)>150)return fromHsl(28,.5,l*.65); // opposite colors turn brown
+  return fromHsl(mapH((r1+d/2+360)%360,RYBH,RGBH),(s1+s2)/2*.92,l*.97);
+ }
+ if(c1)return fromHsl(h1,s1,l);
+ if(c2)return fromHsl(h2,s2,l);
+ return fromHsl(0,0,l);
+}
+const rgbOf=h=>{const n=parseInt(h.slice(1),16);return[n>>16,n>>8&255,n&255]};
+const rd=(a,b)=>Math.hypot(...rgbOf(a).map((v,i)=>v-rgbOf(b)[i]));
+const nameOf=hex=>Object.keys(NAMED).reduce((m,k)=>rd(hex,NAMED[k])<rd(hex,NAMED[m])?k:m);
+const BK=Object.keys(BASE),PAIRS=[];BK.forEach((a,i)=>BK.slice(i+1).forEach(b=>PAIRS.push(a+'+'+b)));
+const EASY=PAIRS.filter(k=>k.split('+').every(c=>['Red','Yellow','Blue','White','Black'].includes(c))&&k!=='Yellow+Black');
+const RES=PAIRS.map(k=>{const[a,b]=k.split('+'),hex=mix(BASE[a],BASE[b]);return{hex,name:nameOf(hex)}});
 const rnd=n=>Math.floor(Math.random()*n),pick=a=>a[rnd(a.length)];
 const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=rnd(i+1);[a[i],a[j]]=[a[j],a[i]]}return a};
 const timeFor=l=>Math.max(6,15-(l-1)*1.5);
@@ -92,22 +109,22 @@ function mathQ(l){
  return{kind:'m',id:t,html:`<div class="q">${t}</div>`,hint:'Solve it',opts:shuffle([...set]).map(v=>({label:v,val:v===ans}))};
 }
 function fresh(g){let q;for(let i=0;i<60;i++){q=g(S.level);if(!S.seen.has(q.id))break}S.seen.add(q.id);return q}
-const col=hex=>{const n=parseInt(hex.slice(1),16),r=(n>>16)/255,g=(n>>8&255)/255,b=(n&255)/255,mx=Math.max(r,g,b),mn=Math.min(r,g,b),d=mx-mn;let h=0;if(d){h=mx===r?((g-b)/d)%6:mx===g?(b-r)/d+2:(r-g)/d+4;h=(h*60+360)%360}return[h,(mx+mn)/2]};
-const dist=(a,b)=>{const x=col(a),y=col(b);let dh=Math.abs(x[0]-y[0]);dh=Math.min(dh,360-dh);return dh/3+Math.abs(x[1]-y[1])*100};
-const nearest=(list,get,ref)=>shuffle(list.slice().sort((p,q)=>dist(get(p),ref)-dist(get(q),ref)).slice(0,5)).slice(0,3);
+const distinct=(list,n,used)=>{const out=[],u=new Set(used);for(const o of list){if(out.length>=n)break;if(!u.has(o.name)){u.add(o.name);out.push(o)}}return out};
 function colorQ(l){
- const hard=l>=3,pool=LV_POOL[Math.min(l,4)-1],k=pick(pool),[A,B]=k.split('+'),[name,hex]=MIX[k];
+ const hard=l>=3,pool=l===1?EASY:PAIRS,[A,B]=pick(pool).split('+'),res=mix(BASE[A],BASE[B]),rn=nameOf(res);
  const reverse=hard&&rnd(2)===0;
  if(!reverse){
-  const cand=Object.values(MIX).filter(v=>v[0]!==name);
-  const wrong=hard?nearest(cand,v=>v[1],hex):shuffle(cand).slice(0,3);
-  const opts=shuffle([[name,hex],...wrong]).map(v=>({label:v[0],sw:v[1],hide:hard,val:v[0]===name}));
-  return{kind:'c',id:k+'|f',html:`<div class="mix"><div class="sw" style="background:${BASE[A]}"></div>+<div class="sw" style="background:${BASE[B]}"></div>=<div class="sw q2">?</div></div>`,hint:hard?'Mix them':`${A} + ${B}`,opts};
+  let cand=RES.filter(r=>r.name!==rn&&rd(r.hex,res)>55);
+  if(hard)cand=cand.sort((p,q)=>rd(p.hex,res)-rd(q.hex,res)).slice(0,8);
+  const wrong=distinct(shuffle(cand),3,[rn]);
+  const opts=shuffle([{hex:res,name:rn},...wrong]).map(o=>({label:o.name,sw:o.hex,hide:hard,val:o.hex===res}));
+  return{kind:'c',id:A+'+'+B+'|f',html:`<div class="mix"><div class="sw" style="background:${BASE[A]}"></div>+<div class="sw" style="background:${BASE[B]}"></div>=<div class="sw q2">?</div></div>`,hint:hard?'Mix them':`${A} + ${B}`,opts};
  }
- const cand=Object.keys(BASE).filter(c=>c!==B&&c!==A&&(MIX[A+'+'+c]||MIX[c+'+'+A]||[])[0]!==name);
- const wrong=nearest(cand,c=>BASE[c],BASE[B]);
- const opts=shuffle([B,...wrong]).map(c=>({label:c,sw:BASE[c],hide:true,val:c===B}));
- return{kind:'c',id:k+'|r',html:`<div class="mix"><div class="sw" style="background:${BASE[A]}"></div>+<div class="sw q2">?</div>=<div class="sw" style="background:${hex}"></div></div>`,hint:'Find the missing color',opts};
+ let cand=BK.filter(c=>c!==A&&c!==B&&rd(mix(BASE[A],BASE[c]),res)>55).map(c=>({name:c,hex:BASE[c]}));
+ cand=cand.sort((p,q)=>rd(p.hex,BASE[B])-rd(q.hex,BASE[B])).slice(0,5);
+ const wrong=shuffle(cand).slice(0,3);
+ const opts=shuffle([{name:B,hex:BASE[B]},...wrong]).map(o=>({label:o.name,sw:o.hex,hide:true,val:o.name===B}));
+ return{kind:'c',id:A+'+'+B+'|r',html:`<div class="mix"><div class="sw" style="background:${BASE[A]}"></div>+<div class="sw q2">?</div>=<div class="sw" style="background:${res}"></div></div>`,hint:'Find the missing color',opts};
 }
 
 function home(){
